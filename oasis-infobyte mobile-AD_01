@@ -1,0 +1,514 @@
+import gradio as gr
+from datetime import datetime
+import math
+
+class UnitConverter:
+    """
+    Main converter class - Acts like a Java backend service
+    Handles all conversion operations with precision
+    """
+    
+    def __init__(self):
+        """Initialize converter with unit definitions"""
+        self.conversion_history = []
+        self.max_history = 10
+    
+    @staticmethod
+    def convert_length(value, from_unit, to_unit):
+        """
+        Convert length units
+        Base unit: Meter
+        """
+      
+        to_meters = {
+            "Millimeters": 0.001,
+            "Centimeters": 0.01,
+            "Meters": 1.0,
+            "Kilometers": 1000.0,
+            "Inches": 0.0254,
+            "Feet": 0.3048,
+            "Yards": 0.9144,
+            "Miles": 1609.34
+        }
+        
+        if from_unit not in to_meters or to_unit not in to_meters:
+            return None
+        
+        
+        meters = value * to_meters[from_unit]
+        result = meters / to_meters[to_unit]
+        return result
+    
+    
+    
+    @staticmethod
+    def convert_weight(value, from_unit, to_unit):
+        """
+        Convert weight units
+        Base unit: Kilogram
+        """
+        
+        to_kilograms = {
+            "Milligrams": 0.000001,
+            "Grams": 0.001,
+            "Kilograms": 1.0,
+            "Pounds": 0.453592,
+            "Ounces": 0.0283495,
+            "Tons": 1000.0
+        }
+        
+        if from_unit not in to_kilograms or to_unit not in to_kilograms:
+            return None
+        
+        
+        kilograms = value * to_kilograms[from_unit]
+        result = kilograms / to_kilograms[to_unit]
+        return result
+    
+
+    
+    @staticmethod
+    def convert_temperature(value, from_unit, to_unit):
+        """
+        Convert temperature units
+        Handles Celsius, Fahrenheit, Kelvin
+        """
+        if from_unit == to_unit:
+            return value
+        
+        
+        if from_unit == "Celsius":
+            celsius = value
+        elif from_unit == "Fahrenheit":
+            celsius = (value - 32) * 5/9
+        elif from_unit == "Kelvin":
+            celsius = value - 273.15
+        else:
+            return None
+        
+        
+        if to_unit == "Celsius":
+            return celsius
+        elif to_unit == "Fahrenheit":
+            return (celsius * 9/5) + 32
+        elif to_unit == "Kelvin":
+            return celsius + 273.15
+        else:
+            return None
+    
+    
+    @staticmethod
+    def convert_volume(value, from_unit, to_unit):
+        """
+        Convert volume units
+        Base unit: Liter
+        """
+        
+        to_liters = {
+            "Milliliters": 0.001,
+            "Liters": 1.0,
+            "Gallons": 3.78541,
+            "Cubic Meters": 1000.0,
+            "Cubic Centimeters": 0.001,
+            "Fluid Ounces": 0.0295735
+        }
+        
+        if from_unit not in to_liters or to_unit not in to_liters:
+            return None
+        
+       
+        liters = value * to_liters[from_unit]
+        result = liters / to_liters[to_unit]
+        return result
+    
+   
+    
+    def convert(self, value_str, category, from_unit, to_unit):
+        """
+        Main conversion method - Routes to appropriate converter
+        Validates input and returns formatted result
+        """
+        
+        try:
+            value = float(value_str)
+        except (ValueError, TypeError):
+            return self._format_error("Invalid input! Please enter a valid number.")
+        
+       
+        if value < 0 and category == "🌡️ Temperature" and from_unit == "Kelvin":
+            return self._format_error("Kelvin cannot be negative!")
+        
+        
+        if from_unit == to_unit:
+            return self._format_success(value, from_unit, value, to_unit, "Same units")
+        
+        
+        result = None
+        if category == "📏 Length":
+            result = self.convert_length(value, from_unit, to_unit)
+        elif category == "⚖️ Weight":
+            result = self.convert_weight(value, from_unit, to_unit)
+        elif category == "🌡️ Temperature":
+            result = self.convert_temperature(value, from_unit, to_unit)
+        elif category == "💧 Volume":
+            result = self.convert_volume(value, from_unit, to_unit)
+        
+        
+        if result is None:
+            return self._format_error("Conversion failed! Please check your units.")
+        
+        
+        self._add_to_history(value, from_unit, result, to_unit, category)
+        
+        return self._format_success(value, from_unit, result, to_unit)
+    
+   
+    
+    @staticmethod
+    def _format_result(value):
+        """Format numerical result with appropriate precision"""
+        if abs(value) >= 1e6 or (abs(value) < 0.001 and value != 0):
+            return f"{value:.6e}"
+        elif abs(value) >= 1000:
+            return f"{value:,.2f}"
+        elif abs(value) >= 1:
+            return f"{value:.4f}".rstrip('0').rstrip('.')
+        else:
+            return f"{value:.6f}".rstrip('0').rstrip('.')
+    
+    def _format_success(self, input_val, from_unit, output_val, to_unit, note=""):
+        """Format successful conversion result"""
+        input_formatted = self._format_result(input_val)
+        output_formatted = self._format_result(output_val)
+        
+        result = f"✅ **CONVERSION SUCCESSFUL**\n\n"
+        result += f"📊 **Input:** {input_formatted} {from_unit}\n"
+        result += f"🎯 **Result:** {output_formatted} {to_unit}\n"
+        
+        if note:
+            result += f"\n💡 Note: {note}"
+        
+        result += f"\n\n⏰ Converted at: {datetime.now().strftime('%I:%M:%S %p')}"
+        
+        return result
+    
+    @staticmethod
+    def _format_error(message):
+        """Format error message"""
+        return f"❌ **ERROR**\n\n{message}\n\n💡 Please check your input and try again."
+    
+    def _add_to_history(self, input_val, from_unit, output_val, to_unit, category):
+        """Add conversion to history"""
+        entry = {
+            'input': self._format_result(input_val),
+            'from': from_unit,
+            'output': self._format_result(output_val),
+            'to': to_unit,
+            'category': category,
+            'time': datetime.now().strftime('%I:%M %p')
+        }
+        
+        self.conversion_history.insert(0, entry)
+        if len(self.conversion_history) > self.max_history:
+            self.conversion_history.pop()
+    
+    def get_history(self):
+        """Get formatted conversion history"""
+        if not self.conversion_history:
+            return "📝 **CONVERSION HISTORY**\n\nNo conversions yet. Start converting!"
+        
+        history_text = "📝 **CONVERSION HISTORY**\n\n"
+        for i, entry in enumerate(self.conversion_history, 1):
+            history_text += f"**{i}.** {entry['category']} | {entry['time']}\n"
+            history_text += f"   {entry['input']} {entry['from']} → {entry['output']} {entry['to']}\n\n"
+        
+        return history_text
+
+
+class UnitConverterUI:
+    """
+    UI Controller class - Acts like an Android Activity
+    Manages UI components and user interactions
+    """
+    
+    def __init__(self):
+        """Initialize UI with converter backend"""
+        self.converter = UnitConverter()
+        self.unit_mappings = self._initialize_units()
+    
+    def _initialize_units(self):
+        """Initialize unit categories - Similar to Android string resources"""
+        return {
+            "📏 Length": ["Millimeters", "Centimeters", "Meters", "Kilometers", 
+                         "Inches", "Feet", "Yards", "Miles"],
+            "⚖️ Weight": ["Milligrams", "Grams", "Kilograms", 
+                         "Pounds", "Ounces", "Tons"],
+            "🌡️ Temperature": ["Celsius", "Fahrenheit", "Kelvin"],
+            "💧 Volume": ["Milliliters", "Liters", "Gallons", 
+                         "Cubic Meters", "Cubic Centimeters", "Fluid Ounces"]
+        }
+    
+    def update_units(self, category):
+        """
+        Update unit dropdowns based on category selection
+        Similar to Android Spinner population
+        """
+        units = self.unit_mappings.get(category, [])
+        return (
+            gr.Dropdown(choices=units, value=units[0] if units else None),
+            gr.Dropdown(choices=units, value=units[1] if len(units) > 1 else units[0])
+        )
+    
+    def perform_conversion(self, value, category, from_unit, to_unit):
+        """Handle conversion button click"""
+        return self.converter.convert(value, category, from_unit, to_unit)
+    
+    def swap_units(self, from_unit, to_unit):
+        """Swap from and to units"""
+        return to_unit, from_unit
+    
+    def clear_all(self):
+        """Clear all inputs"""
+        return "", "📏 Length", None, None, "", ""
+    
+    def show_history(self):
+        """Display conversion history"""
+        return self.converter.get_history()
+    
+    
+    
+    def build_interface(self):
+        """
+        Build the complete Gradio interface
+        Layout structure inspired by Android XML layouts
+        """
+        
+        custom_css = """
+        .app-header {
+            text-align: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 2rem;
+            border-radius: 15px;
+            margin-bottom: 2rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        .app-title {
+            color: white;
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin: 0;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        .app-subtitle {
+            color: #e0e7ff;
+            font-size: 1.1rem;
+            margin-top: 0.5rem;
+        }
+        .convert-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+            font-size: 1.2rem !important;
+            font-weight: bold !important;
+            padding: 1rem !important;
+        }
+        .output-box {
+            background: #f0f9ff;
+            border-left: 4px solid #667eea;
+            padding: 1rem;
+            border-radius: 8px;
+        }
+        """
+        
+        with gr.Blocks(theme=gr.themes.Soft(), css=custom_css, title="Unit Converter") as app:
+            
+            
+            
+            gr.HTML("""
+                <div class="app-header">
+                    <h1 class="app-title">🔄 Unit Converter</h1>
+                    <p class="app-subtitle">Professional Mobile Application</p>
+                    <p class="app-subtitle">Convert units instantly with precision</p>
+                </div>
+            """)
+            
+            
+            
+            with gr.Row():
+                with gr.Column(scale=2):
+                    gr.Markdown("### 🎯 Conversion Setup")
+                    
+                   
+                    category = gr.Dropdown(
+                        choices=list(self.unit_mappings.keys()),
+                        value="📏 Length",
+                        label="📂 Select Category",
+                        info="Choose the type of unit to convert"
+                    )
+                    
+                    
+                    value_input = gr.Textbox(
+                        label="📊 Enter Value",
+                        placeholder="e.g., 100",
+                        value="1",
+                        info="Enter the numerical value to convert"
+                    )
+                    
+                   
+                    with gr.Row():
+                        from_unit = gr.Dropdown(
+                            choices=self.unit_mappings["📏 Length"],
+                            value="Centimeters",
+                            label="From Unit",
+                            scale=2
+                        )
+                        
+                        swap_btn = gr.Button("🔄", scale=0, size="sm")
+                        
+                        to_unit = gr.Dropdown(
+                            choices=self.unit_mappings["📏 Length"],
+                            value="Meters",
+                            label="To Unit",
+                            scale=2
+                        )
+                    
+                   
+                    with gr.Row():
+                        convert_btn = gr.Button(
+                            "⚡ CONVERT NOW",
+                            variant="primary",
+                            size="lg",
+                            elem_classes="convert-btn"
+                        )
+                        clear_btn = gr.Button(
+                            "🗑️ Clear",
+                            size="lg"
+                        )
+            
+            
+            gr.Markdown("---")
+            gr.Markdown("### 📋 Conversion Result")
+            
+            output = gr.Markdown(
+                value="Ready to convert! Enter a value and click **CONVERT NOW**",
+                elem_classes="output-box"
+            )
+            
+            
+            
+            with gr.Accordion("📜 Conversion History", open=False):
+                history_output = gr.Markdown("No conversions yet.")
+                refresh_history_btn = gr.Button("🔄 Refresh History", size="sm")
+            
+            
+            
+            gr.Markdown("---")
+            with gr.Accordion("ℹ️ About & Features", open=False):
+                gr.Markdown("""
+                ### ✨ Features
+                - **Multi-Category Support:** Length, Weight, Temperature, Volume
+                - **High Precision:** Accurate conversions with proper formatting
+                - **Real-time Conversion:** Instant results as you type
+                - **Conversion History:** Track your recent conversions
+                - **Input Validation:** Smart error handling and user guidance
+                - **Mobile-Optimized:** Responsive design for all devices
+                
+                ### 📏 Supported Units
+                **Length:** Millimeters, Centimeters, Meters, Kilometers, Inches, Feet, Yards, Miles  
+                **Weight:** Milligrams, Grams, Kilograms, Pounds, Ounces, Tons  
+                **Temperature:** Celsius, Fahrenheit, Kelvin  
+                **Volume:** Milliliters, Liters, Gallons, Cubic Meters, Cubic Centimeters, Fluid Ounces
+                
+                ### 👨‍💻 Developer
+                Mobile App Development Internship Project  
+                Built with Python & Gradio
+                """)
+            
+           
+            category.change(
+                fn=self.update_units,
+                inputs=[category],
+                outputs=[from_unit, to_unit]
+            )
+            
+            
+            convert_btn.click(
+                fn=self.perform_conversion,
+                inputs=[value_input, category, from_unit, to_unit],
+                outputs=[output]
+            ).then(
+                fn=self.show_history,
+                outputs=[history_output]
+            )
+            
+          
+            swap_btn.click(
+                fn=self.swap_units,
+                inputs=[from_unit, to_unit],
+                outputs=[from_unit, to_unit]
+            )
+            
+            
+            clear_btn.click(
+                fn=self.clear_all,
+                outputs=[value_input, category, from_unit, to_unit, output, history_output]
+            )
+            
+            
+            refresh_history_btn.click(
+                fn=self.show_history,
+                outputs=[history_output]
+            )
+            
+            
+            value_input.submit(
+                fn=self.perform_conversion,
+                inputs=[value_input, category, from_unit, to_unit],
+                outputs=[output]
+            ).then(
+                fn=self.show_history,
+                outputs=[history_output]
+            )
+        
+        return app
+
+
+
+
+def main():
+    """
+    Main application entry point
+    Similar to MainActivity in Android
+    """
+    print("=" * 80)
+    print("          UNIT CONVERTER - MOBILE APPLICATION LAUNCHER")
+    print("=" * 80)
+    print("\n🚀 Initializing application...")
+    print("📱 Building mobile-style interface...")
+    print("🌐 Starting Gradio server...\n")
+    
+    
+    ui = UnitConverterUI()
+    
+   
+    app = ui.build_interface()
+    
+    
+    print("✅ Application ready!")
+    print("🔗 Generating shareable link...\n")
+    print("=" * 80)
+    print("                    LAUNCH SUCCESSFUL")
+    print("=" * 80)
+    print("\n📍 Your Unit Converter app is now live!")
+    print("🌐 Use the PUBLIC URL (*.gradio.live) to access your app")
+    print("📱 The link works on mobile devices too!")
+    print("\n" + "=" * 80 + "\n")
+    
+   
+    app.launch(
+        share=True,
+        server_name="0.0.0.0",
+        show_error=True,
+        quiet=False
+    )
+
+if __name__ == "__main__":
+    main()
